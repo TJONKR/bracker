@@ -1,0 +1,21 @@
+{
+  "name": "bracker",
+  "version": "1.0.0",
+  "description": "MCP server for tracking developer builds and generating build-in-public content",
+  "main": "index.js",
+  "bin": {
+    "bracker": "index.js"
+  },
+  "scripts": {
+    "test": "echo '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' | node index.js"
+  },
+  "keywords": ["mcp", "bracker", "developer", "gamification", "build-tracker"],
+  "author": "Bracker",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
