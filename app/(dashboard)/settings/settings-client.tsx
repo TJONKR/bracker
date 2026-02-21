@@ -105,13 +105,47 @@ export function SettingsClient({ profile }: SettingsProps) {
       <div className="settings-section">
         <h3>Quick Setup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '12px' }}>
-          Paste this in your terminal to configure Bracker + Claude Code in one command:
+          Paste this in your terminal — sets up auto-logging for every Claude Code session:
         </p>
         <button
           className="btn-full btn-primary"
           type="button"
           onClick={() => {
-            const cmd = `mkdir -p ~/.bracker && cat > ~/.bracker/config.json << 'EOF'\n{"apiUrl":"https://bracker.vercel.app","apiKey":"${apiKey}","username":"${profile.username}"}\nEOF\necho "Bracker configured for ${profile.username}"`;
+            const cmd = `mkdir -p ~/.bracker && mkdir -p ~/.claude
+
+cat > ~/.bracker/config.json << 'EOF'
+{"apiUrl":"https://bracker.vercel.app","apiKey":"${apiKey}","username":"${profile.username}"}
+EOF
+
+cat > ~/.bracker/stop.sh << 'HOOK'
+#!/bin/bash
+CONFIG_FILE="$HOME/.bracker/config.json"
+if [ ! -f "$CONFIG_FILE" ]; then exit 0; fi
+API_URL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CONFIG_FILE','utf8')).apiUrl)" 2>/dev/null)
+API_KEY=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CONFIG_FILE','utf8')).apiKey)" 2>/dev/null)
+if [ -z "$API_URL" ] || [ -z "$API_KEY" ]; then exit 0; fi
+REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || echo "unknown")
+DIFF_SUMMARY=$(git diff --stat HEAD~1 HEAD 2>/dev/null | head -20 || echo "no diff available")
+COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "Claude Code session")
+escape_json() { printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$1"; }
+DIFF_JSON=$(escape_json "$DIFF_SUMMARY")
+MSG_JSON=$(escape_json "$COMMIT_MSG")
+curl -s -X POST "\${API_URL}/api/builds" -H "Authorization: Bearer \${API_KEY}" -H "Content-Type: application/json" -d "{\\"repo\\":\\"\${REPO}\\",\\"diff_summary\\":\${DIFF_JSON},\\"commit_message\\":\${MSG_JSON},\\"tokens_used\\":0}" --connect-timeout 5 --max-time 10 > /dev/null 2>&1 &
+exit 0
+HOOK
+chmod +x ~/.bracker/stop.sh
+
+node -e 'var fs=require("fs"),p=require("path"),h=require("os").homedir();fs.mkdirSync(p.join(h,".claude"),{recursive:true});var f=p.join(h,".claude","settings.json"),s={};try{s=JSON.parse(fs.readFileSync(f,"utf8"))}catch(e){}if(!s.hooks)s.hooks={};if(!s.hooks.Stop)s.hooks.Stop=[];var cmd="bash "+h+"/.bracker/stop.sh";if(!s.hooks.Stop.some(function(x){return(x.hooks||[]).some(function(y){return(y.command||"").includes("bracker")})})){s.hooks.Stop.push({hooks:[{type:"command",command:cmd}]});fs.writeFileSync(f,JSON.stringify(s,null,2)+"\\n")}'
+
+echo ""
+echo "Bracker configured for ${profile.username}"
+echo ""
+echo "  ~/.bracker/config.json  — API key + username"
+echo "  ~/.bracker/stop.sh      — auto-logs builds on session end"
+echo "  ~/.claude/settings.json — Stop hook registered"
+echo ""
+echo "  Restart Claude Code — every session will auto-log builds."
+echo ""`;
             navigator.clipboard.writeText(cmd);
             setSetupCopied(true);
             setTimeout(() => setSetupCopied(false), 3000);
@@ -121,16 +155,18 @@ export function SettingsClient({ profile }: SettingsProps) {
           {setupCopied ? 'Copied to clipboard!' : 'Copy setup command'}
         </button>
         <div className="code-card" style={{ fontSize: '12px' }}>
-          <span className="comment"># Creates ~/.bracker/config.json with your API key</span>
+          <span className="comment"># Creates config, stop hook, and updates Claude Code settings</span>
           {'\n'}
-          <span className="comment"># Then verifies bracker is installed</span>
+          <span className="comment"># Every Claude Code session will auto-log builds after this</span>
           {'\n\n'}
-          mkdir -p ~/.bracker
+          <span className="key">~/.bracker/config.json</span>{'    '}
+          <span className="comment">API key + username</span>
           {'\n'}
-          {'echo \'{"apiUrl":"https://bracker.vercel.app","apiKey":"'}
-          <span className="string">{apiKey.slice(0, 8)}...</span>
-          {'"}\''}
-          {' > ~/.bracker/config.json'}
+          <span className="key">~/.bracker/stop.sh</span>{'        '}
+          <span className="comment">build logging on session end</span>
+          {'\n'}
+          <span className="key">~/.claude/settings.json</span>{'   '}
+          <span className="comment">Stop hook registered</span>
         </div>
       </div>
 
