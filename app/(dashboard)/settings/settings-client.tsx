@@ -105,7 +105,7 @@ export function SettingsClient({ profile }: SettingsProps) {
       <div className="settings-section">
         <h3>Quick Setup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '12px' }}>
-          Paste this in your terminal — sets up auto-logging for every Claude Code session:
+          Paste this in your terminal — auto-logs a build every time Claude Code pushes to git:
         </p>
         <button
           className="btn-full btn-primary"
@@ -117,8 +117,14 @@ cat > ~/.bracker/config.json << 'EOF'
 {"apiUrl":"https://bracker.vercel.app","apiKey":"${apiKey}","username":"${profile.username}"}
 EOF
 
-cat > ~/.bracker/stop.sh << 'HOOK'
+cat > ~/.bracker/on-push.sh << 'HOOK'
 #!/bin/bash
+INPUT=$(cat)
+HAS_PUSH=$(echo "$INPUT" | node -e "
+  const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+  console.log(/git\\s+push/.test(d.tool_input?.command||'')?'yes':'no');
+" 2>/dev/null)
+if [ "$HAS_PUSH" != "yes" ]; then exit 0; fi
 CONFIG_FILE="$HOME/.bracker/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then exit 0; fi
 API_URL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CONFIG_FILE','utf8')).apiUrl)" 2>/dev/null)
@@ -133,18 +139,18 @@ MSG_JSON=$(escape_json "$COMMIT_MSG")
 curl -s -X POST "\${API_URL}/api/builds" -H "Authorization: Bearer \${API_KEY}" -H "Content-Type: application/json" -d "{\\"repo\\":\\"\${REPO}\\",\\"diff_summary\\":\${DIFF_JSON},\\"commit_message\\":\${MSG_JSON},\\"tokens_used\\":0}" --connect-timeout 5 --max-time 10 > /dev/null 2>&1 &
 exit 0
 HOOK
-chmod +x ~/.bracker/stop.sh
+chmod +x ~/.bracker/on-push.sh
 
-node -e 'var fs=require("fs"),p=require("path"),h=require("os").homedir();fs.mkdirSync(p.join(h,".claude"),{recursive:true});var f=p.join(h,".claude","settings.json"),s={};try{s=JSON.parse(fs.readFileSync(f,"utf8"))}catch(e){}if(!s.hooks)s.hooks={};if(!s.hooks.Stop)s.hooks.Stop=[];var cmd="bash "+h+"/.bracker/stop.sh";if(!s.hooks.Stop.some(function(x){return(x.hooks||[]).some(function(y){return(y.command||"").includes("bracker")})})){s.hooks.Stop.push({hooks:[{type:"command",command:cmd}]});fs.writeFileSync(f,JSON.stringify(s,null,2)+"\\n")}'
+node -e 'var fs=require("fs"),p=require("path"),h=require("os").homedir();fs.mkdirSync(p.join(h,".claude"),{recursive:true});var f=p.join(h,".claude","settings.json"),s={};try{s=JSON.parse(fs.readFileSync(f,"utf8"))}catch(e){}if(!s.hooks)s.hooks={};if(s.hooks.Stop){s.hooks.Stop=s.hooks.Stop.filter(function(x){return!(x.hooks||[]).some(function(y){return(y.command||"").includes("bracker")})});if(s.hooks.Stop.length===0)delete s.hooks.Stop}if(!s.hooks.PostToolUse)s.hooks.PostToolUse=[];var cmd="bash "+h+"/.bracker/on-push.sh";if(!s.hooks.PostToolUse.some(function(x){return x.matcher==="Bash"&&(x.hooks||[]).some(function(y){return(y.command||"").includes("bracker")})})){s.hooks.PostToolUse.push({matcher:"Bash",hooks:[{type:"command",command:cmd}]});fs.writeFileSync(f,JSON.stringify(s,null,2)+"\\n")}'
 
 echo ""
 echo "Bracker configured for ${profile.username}"
 echo ""
-echo "  ~/.bracker/config.json  — API key + username"
-echo "  ~/.bracker/stop.sh      — auto-logs builds on session end"
-echo "  ~/.claude/settings.json — Stop hook registered"
+echo "  ~/.bracker/config.json   — API key + username"
+echo "  ~/.bracker/on-push.sh    — logs build on git push"
+echo "  ~/.claude/settings.json  — PostToolUse hook registered"
 echo ""
-echo "  Restart Claude Code — every session will auto-log builds."
+echo "  Restart Claude Code — builds auto-log on every push."
 echo ""`;
             navigator.clipboard.writeText(cmd);
             setSetupCopied(true);
@@ -155,18 +161,18 @@ echo ""`;
           {setupCopied ? 'Copied to clipboard!' : 'Copy setup command'}
         </button>
         <div className="code-card" style={{ fontSize: '12px' }}>
-          <span className="comment"># Creates config, stop hook, and updates Claude Code settings</span>
+          <span className="comment"># Creates config, push hook, and updates Claude Code settings</span>
           {'\n'}
-          <span className="comment"># Every Claude Code session will auto-log builds after this</span>
+          <span className="comment"># Builds auto-log every time Claude Code runs git push</span>
           {'\n\n'}
-          <span className="key">~/.bracker/config.json</span>{'    '}
+          <span className="key">~/.bracker/config.json</span>{'   '}
           <span className="comment">API key + username</span>
           {'\n'}
-          <span className="key">~/.bracker/stop.sh</span>{'        '}
-          <span className="comment">build logging on session end</span>
+          <span className="key">~/.bracker/on-push.sh</span>{'    '}
+          <span className="comment">logs build on git push</span>
           {'\n'}
-          <span className="key">~/.claude/settings.json</span>{'   '}
-          <span className="comment">Stop hook registered</span>
+          <span className="key">~/.claude/settings.json</span>{'  '}
+          <span className="comment">PostToolUse hook registered</span>
         </div>
       </div>
 
