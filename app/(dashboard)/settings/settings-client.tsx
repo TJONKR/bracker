@@ -111,7 +111,7 @@ export function SettingsClient({ profile }: SettingsProps) {
           className="btn-full btn-primary"
           type="button"
           onClick={() => {
-            const cmd = `mkdir -p ~/.bracker && cat > ~/.bracker/config.json << 'EOF'\n{"apiUrl":"https://bracker.vercel.app","apiKey":"${apiKey}","username":"${profile.username}"}\nEOF\nnpx -y bracker@latest --version && echo "Bracker configured for ${profile.username}"`;
+            const cmd = `mkdir -p ~/.bracker && cat > ~/.bracker/config.json << 'EOF'\n{"apiUrl":"https://bracker.vercel.app","apiKey":"${apiKey}","username":"${profile.username}"}\nEOF\necho "Bracker configured for ${profile.username}"`;
             navigator.clipboard.writeText(cmd);
             setSetupCopied(true);
             setTimeout(() => setSetupCopied(false), 3000);
